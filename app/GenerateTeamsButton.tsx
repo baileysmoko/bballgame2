@@ -7,6 +7,21 @@ interface GenerateTeamsButtonProps {
   onTeamsGenerated: (teams: any) => void;
   setLoading: (loading: boolean) => void;
 }
+interface TeamData {
+  players: Player[];
+  recruitingPoints: number;
+  pendingRecruitingActions: [string, number][]; // Array of tuples: [playerId, points]
+  myRecruits: [string, number][];
+}
+
+interface RecruitingInfo {
+  teamName: string;
+  pointsSpent: number;
+}
+
+interface HighSchoolPlayer extends Player {
+  recruitingInfo: RecruitingInfo[];
+}
 
 interface Player {
     id: string;
@@ -37,7 +52,6 @@ interface Player {
 const firstNames = ["Michael", "LeBron", "Kobe", "Stephen", "Kevin", "Shaquille", "Tim", "Magic", "Larry", "Kareem"];
 const lastNames = ["Jordan", "James", "Bryant", "Curry", "Durant", "O'Neal", "Duncan", "Johnson", "Bird", "Abdul-Jabbar"];
 const classYears = ["Freshman", "Sophomore", "Junior", "Senior"];
-const positions = ['PG', 'SG', 'SF', 'PF', 'C', 'bPG', 'bSG', 'bSF', 'bPF', 'bC', 'N/A', 'N/A'];
 
 const generateRandomName = () => {
   const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
@@ -99,76 +113,79 @@ const generateInitialStats = () => ({
     fta: 0,
   });
 
-const generateTeams = () => {
+  const generateTeams = () => {
     const teamNames = Array.from({ length: 64 }, (_, i) => (i + 1).toString());
-    const newTeams: { [key: string]: Player[] } = {};
+    const newTeams: { [key: string]: TeamData } = {};
   
     teamNames.forEach(teamName => {
       const players: Player[] = [];
   
       classYears.forEach(classYear => {
-          for (let i = 0; i < 3; i++) {
-            const baseAttributes = generateRandomAttributes(false); // false for college players
-            let bonus = 0;
-            if (classYear === "Sophomore") bonus = 4;
-            if (classYear === "Junior") bonus = 8;
-            if (classYear === "Senior") bonus = 12;
-    
-            const enhancedAttributes = Object.fromEntries(
-              Object.entries(baseAttributes).map(([key, value]) => {
-                // Apply bonus only to normal attributes (not ending with 'Progression')
-                if (!key.endsWith('Progression')) {
-                  return [key, Math.min(value + 16 + bonus, 100)];
-                }
-                // Return progression attributes unchanged
-                return [key, value];
-              })
-            );
-            players.push({
-                id: `player-${teamName}-${classYear}-${i}`,
-                name: generateRandomName(),
-                classYear: classYear,
-                height: generateRandomHeight(),
-                position: '',
-                attributes: enhancedAttributes,
-                stats: generateInitialStats(), // Add this line
-              });
-          }
-        });
+        for (let i = 0; i < 3; i++) {
+          const baseAttributes = generateRandomAttributes(false); // false for college players
+          let bonus = 0;
+          if (classYear === "Sophomore") bonus = 4;
+          if (classYear === "Junior") bonus = 8;
+          if (classYear === "Senior") bonus = 12;
   
-
-    players.forEach(player => {
-      player.totalAttributes = Object.values(player.attributes).reduce((sum, value) => sum + value, 0);
+          const enhancedAttributes = Object.fromEntries(
+            Object.entries(baseAttributes).map(([key, value]) => {
+              // Apply bonus only to normal attributes (not ending with 'Progression')
+              if (!key.endsWith('Progression')) {
+                return [key, Math.min(value + 16 + bonus, 100)];
+              }
+              // Return progression attributes unchanged
+              return [key, value];
+            })
+          );
+          players.push({
+            id: `player-${teamName}-${classYear}-${i}`,
+            name: generateRandomName(),
+            classYear: classYear,
+            height: generateRandomHeight(),
+            position: '',
+            attributes: enhancedAttributes,
+            stats: generateInitialStats(), // Add this line
+          });
+        }
+      });
+  
+      players.forEach(player => {
+        player.totalAttributes = Object.values(player.attributes).reduce((sum, value) => sum + value, 0);
+      });
+  
+      players.sort((a, b) => b.totalAttributes! - a.totalAttributes!);
+  
+      const starters = players.slice(0, 5);
+      const backups = players.slice(5, 10);
+      const extras = players.slice(10);
+  
+      starters.sort((a, b) => a.height - b.height);
+      backups.sort((a, b) => a.height - b.height);
+  
+      const positionOrder = ['PG', 'SG', 'SF', 'PF', 'C'];
+      starters.forEach((player, index) => {
+        player.position = positionOrder[index];
+      });
+  
+      const backupPositionOrder = ['bPG', 'bSG', 'bSF', 'bPF', 'bC'];
+      backups.forEach((player, index) => {
+        player.position = backupPositionOrder[index];
+      });
+  
+      extras.forEach(player => {
+        player.position = 'N/A';
+      });
+  
+      newTeams[teamName] = {
+        players: [...starters, ...backups, ...extras],
+        recruitingPoints: 150,
+        pendingRecruitingActions: [], // Initialize as an empty array
+        myRecruits: [] // Initialize as an empty array
+      };
     });
-
-    players.sort((a, b) => b.totalAttributes! - a.totalAttributes!);
-
-    const starters = players.slice(0, 5);
-    const backups = players.slice(5, 10);
-    const extras = players.slice(10);
-
-    starters.sort((a, b) => a.height - b.height);
-    backups.sort((a, b) => a.height - b.height);
-
-    const positionOrder = ['PG', 'SG', 'SF', 'PF', 'C'];
-    starters.forEach((player, index) => {
-      player.position = positionOrder[index];
-    });
-
-    const backupPositionOrder = ['bPG', 'bSG', 'bSF', 'bPF', 'bC'];
-    backups.forEach((player, index) => {
-      player.position = backupPositionOrder[index];
-    });
-
-    extras.forEach(player => {
-      player.position = 'N/A';
-    });
-
-    newTeams[teamName] = [...starters, ...backups, ...extras];
-  });
-
-  return newTeams;
-};
+    return newTeams;
+  };  
 
 const generateRandomHeighths = (classYear: string) => {
     const normalDistribution = randomNormal(68, 3);
@@ -187,14 +204,14 @@ const generateRandomHeighths = (classYear: string) => {
   
   const generateHighSchoolTeams = () => {
     const teamNames = Array.from({ length: 64 }, (_, i) => (i + 1).toString());
-    const newTeams: { [key: string]: Player[] } = {};
+    const newTeams: { [key: string]: HighSchoolPlayer[] } = {};
   
     teamNames.forEach(teamName => {
-      const players: Player[] = [];
+      const players: HighSchoolPlayer[] = [];
   
       classYears.forEach(classYear => {
         for (let i = 0; i < 3; i++) {
-          const baseAttributes = generateRandomAttributes(true); // true for high school players
+          const baseAttributes = generateRandomAttributes(true);
           let bonus = 0;
           if (classYear === "Sophomore") bonus = 4;
           if (classYear === "Junior") bonus = 8;
@@ -202,14 +219,13 @@ const generateRandomHeighths = (classYear: string) => {
   
           const enhancedAttributes = Object.fromEntries(
             Object.entries(baseAttributes).map(([key, value]) => {
-              // Apply bonus only to normal attributes (not ending with 'Progression')
               if (!key.endsWith('Progression')) {
                 return [key, Math.min(value + bonus, 100)];
               }
-              // Return progression attributes unchanged
               return [key, value];
             })
           );
+  
           players.push({
             id: `hs-player-${teamName}-${classYear}-${i}`,
             name: generateRandomName(),
@@ -217,13 +233,12 @@ const generateRandomHeighths = (classYear: string) => {
             height: generateRandomHeighths(classYear),
             position: '',
             attributes: enhancedAttributes,
-            stats: generateInitialStats(), // Add this line
+            stats: generateInitialStats(),
+            recruitingInfo: [], // Initialize with an empty array
           });
         }
       });
   
-  
-
     players.forEach(player => {
       player.totalAttributes = Object.values(player.attributes).reduce((sum, value) => sum + value, 0);
     });
@@ -256,42 +271,6 @@ const generateRandomHeighths = (classYear: string) => {
 
   return newTeams;
 };
-
-const generateSchedule = (teamNames: string[]) => {
-    const schedule: { [day: string]: { [matchup: string]: [string, string] } } = {};
-    const totalTeams = teamNames.length;
-    const totalDays = 21;
-    const matchupsPerDay = totalTeams / 2;
-  
-    for (let day = 1; day <= totalDays; day++) {
-      schedule[day.toString()] = {};
-      const dayMatches: Set<string> = new Set();
-  
-      for (let match = 1; match <= matchupsPerDay; match++) {
-        let team1: string, team2: string;
-        do {
-          team1 = teamNames[Math.floor(Math.random() * totalTeams)];
-          team2 = teamNames[Math.floor(Math.random() * totalTeams)];
-        } while (
-          team1 === team2 ||
-          dayMatches.has(team1) ||
-          dayMatches.has(team2) ||
-          Object.values(schedule).some(daySchedule => 
-            Object.values(daySchedule).some(matchup => 
-              (matchup[0] === team1 && matchup[1] === team2) ||
-              (matchup[0] === team2 && matchup[1] === team1)
-            )
-          )
-        );
-      
-        dayMatches.add(team1);
-        dayMatches.add(team2);
-        schedule[day.toString()][`Match${match}`] = [team1, team2];
-      }
-    }
-  
-    return schedule;
-  };
   
   const GenerateTeamsButton: React.FC<GenerateTeamsButtonProps> = ({ onTeamsGenerated, setLoading }) => {
     const uploadTeamData = async () => {
@@ -325,20 +304,20 @@ const generateSchedule = (teamNames: string[]) => {
       }
     };
   
-    const uploadTeamsAndRecruits = async (userId: string, teams: any, highSchoolTeams: any) => {
+    const uploadTeamsAndRecruits = async (userId: string, teams: { [key: string]: TeamData }, highSchoolTeams: { [key: string]: Player[] }) => {
       const teamsCollectionRef = collection(db, "users", userId, "teams");
       const recruitsCollectionRef = collection(db, "users", userId, "recruits");
-  
+    
       const batch = writeBatch(db);
-  
-      for (const [teamName, players] of Object.entries(teams)) {
-        batch.set(doc(teamsCollectionRef, teamName), { players });
+    
+      for (const [teamName, teamData] of Object.entries(teams)) {
+        batch.set(doc(teamsCollectionRef, teamName), teamData);
       }
-  
+    
       for (const [teamName, players] of Object.entries(highSchoolTeams)) {
         batch.set(doc(recruitsCollectionRef, teamName), { players });
       }
-  
+    
       await batch.commit();
     };
   

@@ -2,47 +2,56 @@
 
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../../firebaseConfig';
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import GenerateTeamsButton from '../../GenerateTeamsButton';
 
 interface PlayerStats {
-    gamesPlayed: number;
-    points: number;
-    rebounds: number;
-    assists: number;
-    steals: number;
-    blocks: number;
-    fgm: number;
-    fga: number;
-    tpm: number;
-    tpa: number;
-    ftm: number;
-    fta: number;
-  }
-  
-  interface Player {
-    id: string;
-    name: string;
-    classYear: string;
-    height: number;
-    position: string;
-    attributes: {
-      [key: string]: number;
-    };
-    stats: PlayerStats;
-  }
+  gamesPlayed: number;
+  points: number;
+  rebounds: number;
+  assists: number;
+  steals: number;
+  blocks: number;
+  fgm: number;
+  fga: number;
+  tpm: number;
+  tpa: number;
+  ftm: number;
+  fta: number;
+}
+
+interface Player {
+  id: string;
+  name: string;
+  classYear: string;
+  height: number;
+  position: string;
+  attributes: {
+    [key: string]: number;
+  };
+  stats: PlayerStats;
+}
+
+interface TeamData {
+  recruitingPoints: number;
+  pendingRecruitingActions: Array<{ playerId: string; points: number }>;
+}
+
 const RecruitsPage: React.FC = () => {
   const [recruits, setRecruits] = useState<{ [key: string]: Player[] }>({});
   const [loading, setLoading] = useState(true);
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [teamsGenerated, setTeamsGenerated] = useState(false);
+  const [selectedPoints, setSelectedPoints] = useState<number>(0);
+  const [teamData, setTeamData] = useState<TeamData | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         fetchRecruits(user.uid);
+        fetchTeamData(user.uid);
       } else {
         setLoading(false);
         setRecruits({});
@@ -52,6 +61,69 @@ const RecruitsPage: React.FC = () => {
 
     return () => unsubscribe();
   }, []);
+
+  const fetchTeamData = async (userId: string) => {
+    try {
+      const team1Ref = doc(db, "users", userId, "teams", "1");
+      const docSnap = await getDoc(team1Ref);
+
+      if (docSnap.exists()) {
+        setTeamData(docSnap.data() as TeamData);
+      }
+    } catch (error) {
+      console.error("Error fetching team data: ", error);
+    }
+  };
+
+  const assignRecruitingPoints = async (player: Player) => {
+    if (!auth.currentUser) {
+      alert('You must be logged in to assign recruiting points.');
+      return;
+    }
+
+    try {
+      const userId = auth.currentUser.uid;
+      const team1Ref = doc(db, "users", userId, "teams", "1");
+
+      // Check if the document exists
+      const docSnap = await getDoc(team1Ref);
+      if (!docSnap.exists()) {
+        console.error("Team 1 document does not exist");
+        alert('Team 1 document not found. Please generate teams first.');
+        return;
+      }
+
+      const existingActions = docSnap.data().pendingRecruitingActions || [];
+
+      // Remove any existing action for the same player
+      const actionsToKeep = existingActions.filter((action: { playerId: string }) => action.playerId !== player.id);
+
+      const updatedActions = [...actionsToKeep, { playerId: player.id, points: selectedPoints }];
+
+      const totalPoints = updatedActions.reduce((sum, action) => sum + action.points, 0);
+
+      const remainingPoints = 150 - totalPoints;
+
+      if (selectedPoints > remainingPoints) {
+        alert('Not enough recruiting points available.');
+        return;
+      }
+
+      await updateDoc(team1Ref, {
+        pendingRecruitingActions: updatedActions,
+        recruitingPoints: remainingPoints
+      });
+
+      alert(`Assigned ${selectedPoints} recruiting points to ${player.name}`);
+    } catch (error) {
+      console.error("Error assigning recruiting points: ", error);
+      if (error instanceof Error) {
+        alert(`An error occurred while assigning the recruiting points: ${error.message}`);
+      } else {
+        alert('An unknown error occurred while assigning the recruiting points.');
+      }
+    }
+  };
 
   const fetchRecruits = async (userId: string) => {
     try {
@@ -80,8 +152,16 @@ const RecruitsPage: React.FC = () => {
     }
   };
 
+  const selectPlayer = (player: Player) => {
+    setSelectedPlayer(player);
+    if (teamData) {
+      const playerAction = teamData.pendingRecruitingActions.find(action => action.playerId === player.id);
+      setSelectedPoints(playerAction ? playerAction.points : 0);
+    }
+  };
+
   const renderPlayerCard = (player: Player) => (
-    <div key={player.id} className="border p-4 rounded shadow cursor-pointer" onClick={() => setSelectedPlayer(player)}>
+    <div key={player.id} className="border p-4 rounded shadow cursor-pointer" onClick={() => selectPlayer(player)}>
       <h3 className="font-bold">{player.name}</h3>
       <p>Position: {player.position}</p>
       <p>Class: {player.classYear}</p>
@@ -116,12 +196,31 @@ const RecruitsPage: React.FC = () => {
         <li>3PT: ({((player.stats.tpm / player.stats.tpa) * 100).toFixed(1)}%)</li>
         <li>FT: ({((player.stats.ftm / player.stats.fta) * 100).toFixed(1)}%)</li>
       </ul>
-      <button 
-        onClick={() => setSelectedPlayer(null)}
-        className="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-      >
-        Back to Team
-      </button>
+      <div className="mt-4 flex space-x-2">
+        <button 
+          onClick={() => setSelectedPlayer(null)}
+          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+        >
+          Back to Team
+        </button>
+        <div className="flex space-x-2">
+          {[...Array(11)].map((_, i) => (
+            <button 
+              key={i} 
+              onClick={() => setSelectedPoints(i)} 
+              className={`py-2 px-4 rounded ${selectedPoints === i ? 'bg-green-700 text-white' : 'bg-gray-300'}`}
+            >
+              {i}
+            </button>
+          ))}
+        </div>
+        <button 
+          onClick={() => assignRecruitingPoints(player)}
+          className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+        >
+          Submit Points
+        </button>
+      </div>
     </div>
   );
 

@@ -90,7 +90,9 @@ export default function RootLayout({
                         <li>
                           <Link href="/account" className="font-medium text-purple-600 hover:text-gray-200 px-4 py-3 flex items-center transition duration-150 ease-in-out">Account</Link>
                         </li>
-
+                        <li>
+                          <Link href="/my-recruits" className="font-medium text-purple-600 hover:text-gray-200 px-4 py-3 flex items-center transition duration-150 ease-in-out">My Recruits</Link>
+                        </li>
                         <li>
                           <button onClick={handleLogout} className="font-medium text-purple-600 hover:text-gray-200 px-4 py-3 flex items-center transition duration-150 ease-in-out">Log out</button>
                         </li>
