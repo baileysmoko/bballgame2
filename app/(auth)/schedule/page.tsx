@@ -7,6 +7,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import GenerateTeamsButton from '../../GenerateTeamsButton';
 import SimulateNextDayButton from '../../SimulateNextDayButton';
 import Link from 'next/link';
+import RunRecruits from '../../runRecruits';
 
 interface ScheduleData {
   [day: string]: {
@@ -23,11 +24,10 @@ interface GameResult {
 }
 
 const SchedulePage: React.FC = () => {
-    const [schedule, setSchedule] = useState<ScheduleData | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [currentDay, setCurrentDay] = useState(1);
-    const [gameResults, setGameResults] = useState<{ [day: string]: GameResult[] }>({});
-    const [teamRecord, setTeamRecord] = useState({ wins: 0, losses: 0 });
+  const [schedule, setSchedule] = useState<ScheduleData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [currentDay, setCurrentDay] = useState(1);
+  const [gameResults, setGameResults] = useState<{ [day: string]: GameResult[] }>({});
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -38,10 +38,10 @@ const SchedulePage: React.FC = () => {
         setLoading(false);
       }
     });
-  
+
     return () => unsubscribe();
   }, []);
-  
+
   useEffect(() => {
     if (auth.currentUser) {
       fetchGameResults(auth.currentUser.uid, currentDay);
@@ -84,39 +84,39 @@ const SchedulePage: React.FC = () => {
   };
 
   const fetchGameResults = async (userId: string, currentDay: number) => {
-  try {
-    const allResults: { [day: string]: GameResult[] } = {};
-    for (let day = 1; day < currentDay; day++) {
-      const resultsCollectionRef = collection(db, "users", userId, "gameResults", day.toString(), "games");
-      const resultsDocs = await getDocs(resultsCollectionRef);
-      const dayResults: GameResult[] = [];
-      resultsDocs.forEach(doc => {
-        dayResults.push(doc.data() as GameResult);
-      });
-      allResults[day] = dayResults;
+    try {
+      const allResults: { [day: string]: GameResult[] } = {};
+      for (let day = 1; day < currentDay; day++) {
+        const resultsCollectionRef = collection(db, "users", userId, "gameResults", day.toString(), "games");
+        const resultsDocs = await getDocs(resultsCollectionRef);
+        const dayResults: GameResult[] = [];
+        resultsDocs.forEach(doc => {
+          dayResults.push(doc.data() as GameResult);
+        });
+        allResults[day] = dayResults;
+      }
+      setGameResults(allResults);
+    } catch (error) {
+      console.error("Error fetching game results:", error);
     }
-    setGameResults(allResults);
-  } catch (error) {
-    console.error("Error fetching game results:", error);
-  }
-};
+  };
 
-const renderSchedule = () => {
+  const renderSchedule = () => {
     if (!schedule) return null;
-  
+
     return Object.entries(schedule).map(([day, matches]) => {
       const team1Match = Object.entries(matches).find(([_, match]) => match && match.includes && match.includes("1"));
       if (!team1Match) return null;
-  
+
       const [matchId, teamMatch] = team1Match;
       if (!teamMatch || !Array.isArray(teamMatch) || teamMatch.length < 2) return null;
-  
+
       const opponent = teamMatch[0] === "1" ? teamMatch[1] : teamMatch[0];
       const result = gameResults[day]?.find(r => 
         (r && r.homeTeam === "1" && r.awayTeam === opponent) ||
         (r && r.awayTeam === "1" && r.homeTeam === opponent)
       );
-  
+
       return (
         <div key={day} className="mb-2">
           <span className="font-bold">Day {day}:</span>{' '}
@@ -150,6 +150,11 @@ const renderSchedule = () => {
     }
   };
 
+  const handleRecruitsProcessed = () => {
+    // Refresh the schedule or take other actions after recruits are processed
+    fetchSchedule(auth.currentUser!.uid);
+  };
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -160,10 +165,13 @@ const renderSchedule = () => {
       {schedule && Object.keys(schedule).length > 0 ? (
         <>
           <div>{renderSchedule()}</div>
-          <SimulateNextDayButton
-            userId={auth.currentUser!.uid}
-            onSimulationComplete={handleSimulationComplete}
-          />
+          <div className="flex space-x-4">
+            <SimulateNextDayButton
+              userId={auth.currentUser!.uid}
+              onSimulationComplete={handleSimulationComplete}
+            />
+            <RunRecruits onRecruitsProcessed={handleRecruitsProcessed} />
+          </div>
         </>
       ) : (
         <GenerateTeamsButton
