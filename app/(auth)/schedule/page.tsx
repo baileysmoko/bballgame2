@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { db, auth } from '../../firebaseConfig';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where, limit } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import GenerateTeamsButton from '../../GenerateTeamsButton';
 import SimulateNextDayButton from '../../SimulateNextDayButton';

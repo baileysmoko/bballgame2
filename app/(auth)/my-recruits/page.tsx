@@ -8,6 +8,7 @@ import { onAuthStateChanged } from "firebase/auth";
 interface RecruitData {
   playerId: string;
   points: number;
+  recruitingInfo?: { playerId: string }[];
 }
 
 interface PlayerDetails {
@@ -31,6 +32,7 @@ interface PlayerDetails {
     ftm: number;
     fta: number;
   };
+  recruitingInfo?: RecruitData[];
 }
 
 const MyRecruitsPage: React.FC = () => {
@@ -57,7 +59,28 @@ const MyRecruitsPage: React.FC = () => {
     
         const teamData = docSnap.data();
         console.log('Team data:', teamData);
-        const myRecruits: RecruitData[] = teamData.myRecruits || [];
+        let myRecruits: RecruitData[] = teamData.myRecruits || [];
+    
+        // Fetch recruiting info for each recruit
+        myRecruits = await Promise.all(myRecruits.map(async (recruit) => {
+          const parts = recruit.playerId.split('-');
+          if (parts.length >= 3) {
+            const teamNumber = parts[2];
+            const teamRef = doc(db, "users", userId, "recruits", teamNumber);
+            const teamSnap = await getDoc(teamRef);
+            if (teamSnap.exists()) {
+              const teamData = teamSnap.data();
+              if (teamData && Array.isArray(teamData.players)) {
+                const player = teamData.players.find((p: PlayerDetails) => p.id === recruit.playerId);
+                if (player && player.recruitingInfo) {
+                  return { ...recruit, recruitingInfo: player.recruitingInfo };
+                }
+              }
+            }
+          }
+          return recruit;
+        }));
+    
         console.log('Fetched recruits:', myRecruits);
         setRecruits(myRecruits);
         await fetchPlayerNames(userId, myRecruits);
@@ -68,7 +91,6 @@ const MyRecruitsPage: React.FC = () => {
         setLoading(false);
       }
     };
-
     unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         fetchRecruits(user.uid);
@@ -180,40 +202,53 @@ const MyRecruitsPage: React.FC = () => {
   {recruits.map((recruit) => (
     <li 
       key={recruit.playerId} 
-      className="border p-2 rounded cursor-pointer hover:bg-gray-100"
+      className="border p-2 rounded cursor-pointer hover:bg-gray-100 flex flex-col"
       onClick={() => handlePlayerClick(recruit.playerId)}
     >
-      <span className="font-semibold">Player:</span> {playerNames[recruit.playerId] || 'Loading...'}
-      <span className="ml-4 font-semibold">Points:</span> {recruit.points}
+      <div className="flex justify-between items-center">
+        <div>
+          <span className="font-semibold">Player:</span> {playerNames[recruit.playerId] || 'Loading...'}
+          <span className="ml-4 font-semibold">Points:</span> {recruit.points}
+        </div>
+      </div>
+      <div className="text-sm text-white mt-1">
+        <span className="font-semibold">Teams:</span> {
+          recruit.recruitingInfo && recruit.recruitingInfo.length > 0
+            ? recruit.recruitingInfo.map(info => info.playerId).join(', ')
+            : 'No teams'
+        }
+      </div>
     </li>
   ))}
 </ul>
           <div className="border p-4 rounded">
             {playerError && <p className="text-red-500 mb-4">{playerError}</p>}
             {selectedPlayer ? (
-  <>
-    <h2 className="text-xl font-bold mb-2">{selectedPlayer.name}</h2>
-    <p><span className="font-semibold">Position:</span> {selectedPlayer.position}</p>
-    <p><span className="font-semibold">Class:</span> {selectedPlayer.classYear}</p>
-    <p><span className="font-semibold">Height:</span> {Math.floor(selectedPlayer.height / 12)}'{selectedPlayer.height % 12}"</p>
-    <h3 className="text-lg font-semibold mt-4 mb-2">Scouting Report</h3>
-    <p>{selectedPlayer.scoutingReport}</p>
-    <h3 className="text-lg font-semibold mt-4 mb-2">Stats</h3>
-    <ul>
-      <li>Games Played: {selectedPlayer.stats.gamesPlayed}</li>
-      <li>Points: {selectedPlayer.stats.points} ({(selectedPlayer.stats.points / selectedPlayer.stats.gamesPlayed).toFixed(1)} PPG)</li>
-      <li>Rebounds: {selectedPlayer.stats.rebounds} ({(selectedPlayer.stats.rebounds / selectedPlayer.stats.gamesPlayed).toFixed(1)} RPG)</li>
-      <li>Assists: {selectedPlayer.stats.assists} ({(selectedPlayer.stats.assists / selectedPlayer.stats.gamesPlayed).toFixed(1)} APG)</li>
-      <li>Steals: {selectedPlayer.stats.steals} ({(selectedPlayer.stats.steals / selectedPlayer.stats.gamesPlayed).toFixed(1)} SPG)</li>
-      <li>Blocks: {selectedPlayer.stats.blocks} ({(selectedPlayer.stats.blocks / selectedPlayer.stats.gamesPlayed).toFixed(1)} BPG)</li>
-      <li>FG: {selectedPlayer.stats.fgm}/{selectedPlayer.stats.fga} ({((selectedPlayer.stats.fgm / selectedPlayer.stats.fga) * 100).toFixed(1)}%)</li>
-      <li>3PT: {selectedPlayer.stats.tpm}/{selectedPlayer.stats.tpa} ({((selectedPlayer.stats.tpm / selectedPlayer.stats.tpa) * 100).toFixed(1)}%)</li>
-      <li>FT: {selectedPlayer.stats.ftm}/{selectedPlayer.stats.fta} ({((selectedPlayer.stats.ftm / selectedPlayer.stats.fta) * 100).toFixed(1)}%)</li>
-    </ul>
-  </>
-) : (
-  <p>Select a player to view details.</p>
-)}
+              <>
+                <h2 className="text-xl font-bold mb-2">{selectedPlayer.name}</h2>
+                <p><span className="font-semibold">Position:</span> {selectedPlayer.position}</p>
+                <p><span className="font-semibold">Class:</span> {selectedPlayer.classYear}</p>
+                <p><span className="font-semibold">Height:</span> {Math.floor(selectedPlayer.height / 12)}'{selectedPlayer.height % 12}"</p>
+                <h3 className="text-lg font-semibold mt-4 mb-2">Scouting Report</h3>
+                <p>{selectedPlayer.scoutingReport}</p>
+                <h3 className="text-lg font-semibold mt-4 mb-2">Stats</h3>
+                <ul>
+                  <ul>
+                    <li>Games Played: {selectedPlayer.stats.gamesPlayed}</li>
+                    <li>Points: {selectedPlayer.stats.points} ({(selectedPlayer.stats.points / selectedPlayer.stats.gamesPlayed).toFixed(1)} PPG)</li>
+                    <li>Rebounds: {selectedPlayer.stats.rebounds} ({(selectedPlayer.stats.rebounds / selectedPlayer.stats.gamesPlayed).toFixed(1)} RPG)</li>
+                    <li>Assists: {selectedPlayer.stats.assists} ({(selectedPlayer.stats.assists / selectedPlayer.stats.gamesPlayed).toFixed(1)} APG)</li>
+                    <li>Steals: {selectedPlayer.stats.steals} ({(selectedPlayer.stats.steals / selectedPlayer.stats.gamesPlayed).toFixed(1)} SPG)</li>
+                    <li>Blocks: {selectedPlayer.stats.blocks} ({(selectedPlayer.stats.blocks / selectedPlayer.stats.gamesPlayed).toFixed(1)} BPG)</li>
+                    <li>FG: {selectedPlayer.stats.fgm}/{selectedPlayer.stats.fga} ({((selectedPlayer.stats.fgm / selectedPlayer.stats.fga) * 100).toFixed(1)}%)</li>
+                    <li>3PT: {selectedPlayer.stats.tpm}/{selectedPlayer.stats.tpa} ({((selectedPlayer.stats.tpm / selectedPlayer.stats.tpa) * 100).toFixed(1)}%)</li>
+                    <li>FT: {selectedPlayer.stats.ftm}/{selectedPlayer.stats.fta} ({((selectedPlayer.stats.ftm / selectedPlayer.stats.fta) * 100).toFixed(1)}%)</li>
+                  </ul>
+                </ul>
+              </>
+            ) : (
+              <p>Select a player to view details.</p>
+            )}
           </div>
         </div>
       )}

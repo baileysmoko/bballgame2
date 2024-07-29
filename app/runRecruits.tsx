@@ -1,6 +1,6 @@
 import React from 'react';
-import { db, auth } from './firebaseConfig'; // Adjust the import path as needed
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { db, auth } from './firebaseConfig';
+import { doc, getDoc, updateDoc, collection, getDocs, writeBatch, runTransaction } from "firebase/firestore";
 
 interface RunRecruitsProps {
   onRecruitsProcessed: () => void;
@@ -9,6 +9,16 @@ interface RunRecruitsProps {
 interface RecruitData {
   playerId: string;
   points: number;
+}
+
+interface PlayerDetails {
+  id: string;
+  name: string;
+  recruitingInfo?: RecruitData[];
+}
+
+interface UpdatedRecruitPlayers {
+  [key: string]: PlayerDetails[];
 }
 
 const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
@@ -21,43 +31,89 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
 
     try {
       const userId = user.uid;
-      const team1Ref = doc(db, "users", userId, "teams", "1");
+      
+      // Fetch all team data at once
+      const teamsRef = collection(db, "users", userId, "teams");
+      const teamsSnap = await getDocs(teamsRef);
+      const teamDocs = teamsSnap.docs;
 
-      // Get the current team data
-      const docSnap = await getDoc(team1Ref);
-      if (!docSnap.exists()) {
-        alert('Team 1 document not found. Please generate teams first.');
-        return;
-      }
+      // Fetch all recruit team data at once
+      const recruitsRef = collection(db, "users", userId, "recruits");
+      const recruitsSnap = await getDocs(recruitsRef);
+      const recruitDocs = recruitsSnap.docs.reduce((acc, doc) => {
+        acc[doc.id] = doc.data();
+        return acc;
+      }, {} as { [key: string]: any });
 
-      const teamData = docSnap.data();
-      const pendingActions: RecruitData[] = teamData.pendingRecruitingActions || [];
-      const currentRecruits: RecruitData[] = teamData.myRecruits || [];
+      const batch = writeBatch(db);
 
-      // Process each pending action
-      const updatedRecruits: RecruitData[] = [...currentRecruits];
-      for (const action of pendingActions) {
-        const existingRecruitIndex = updatedRecruits.findIndex(
-          (recruit) => recruit.playerId === action.playerId
-        );
+      const updatedRecruitPlayers: UpdatedRecruitPlayers = {};
 
-        if (existingRecruitIndex !== -1) {
-          // Update existing recruit's points
-          updatedRecruits[existingRecruitIndex].points += action.points;
-        } else {
-          // Add new recruit
-          updatedRecruits.push(action);
+      for (const teamDoc of teamDocs) {
+        const teamData = teamDoc.data();
+        const teamNumber = teamDoc.id;
+        const pendingActions: RecruitData[] = teamData.pendingRecruitingActions || [];
+        const currentRecruits: RecruitData[] = teamData.myRecruits || [];
+
+        const updatedRecruits: RecruitData[] = [...currentRecruits];
+
+        for (const action of pendingActions) {
+          const existingRecruitIndex = updatedRecruits.findIndex(
+            (recruit) => recruit.playerId === action.playerId
+          );
+
+          if (existingRecruitIndex !== -1) {
+            updatedRecruits[existingRecruitIndex].points += action.points;
+          } else {
+            updatedRecruits.push(action);
+          }
+
+          const parts = action.playerId.split('-');
+          if (parts.length >= 3) {
+            const recruitTeamNumber = parts[2];
+            const recruitTeamData = recruitDocs[recruitTeamNumber];
+            
+            if (recruitTeamData && Array.isArray(recruitTeamData.players)) {
+              const playerIndex = recruitTeamData.players.findIndex((p: PlayerDetails) => p.id === action.playerId);
+              if (playerIndex !== -1) {
+                if (!updatedRecruitPlayers[recruitTeamNumber]) {
+                  updatedRecruitPlayers[recruitTeamNumber] = [...recruitTeamData.players];
+                }
+                const player = updatedRecruitPlayers[recruitTeamNumber][playerIndex];
+                if (!player.recruitingInfo) {
+                  player.recruitingInfo = [];
+                }
+                const existingActionIndex = player.recruitingInfo.findIndex(
+                  (info: RecruitData) => info.playerId === teamNumber
+                );
+                if (existingActionIndex !== -1) {
+                  player.recruitingInfo[existingActionIndex].points += action.points;
+                } else {
+                  player.recruitingInfo.push({ playerId: teamNumber, points: action.points });
+                }
+              }
+            }
+          }
         }
+
+        // Update team document
+        batch.update(teamDoc.ref, {
+          myRecruits: updatedRecruits,
+          pendingRecruitingActions: [],
+          recruitingPoints: 150
+        });
       }
 
-      // Update the document with the new myRecruits array and clear pendingRecruitingActions
-      await updateDoc(team1Ref, {
-        myRecruits: updatedRecruits,
-        pendingRecruitingActions: [],
-        recruitingPoints: 150 // Reset recruiting points to 150
-      });
+      // Update recruit team documents
+      for (const [recruitTeamNumber, players] of Object.entries(updatedRecruitPlayers)) {
+        const recruitTeamRef = doc(db, "users", userId, "recruits", recruitTeamNumber);
+        batch.update(recruitTeamRef, { players });
+      }
 
-      alert('Recruits processed successfully!');
+      // Commit all updates in a single batch
+      await batch.commit();
+
+      alert('Recruits processed successfully for all teams!');
       onRecruitsProcessed();
     } catch (error) {
       console.error("Error processing recruits: ", error);
@@ -74,7 +130,7 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
       onClick={processRecruits}
       className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
     >
-      Process Recruits
+      Process Recruits for All Teams
     </button>
   );
 };
