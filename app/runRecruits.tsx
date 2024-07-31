@@ -9,12 +9,19 @@ interface RunRecruitsProps {
 interface RecruitData {
   playerId: string;
   points: number;
+  offeredScholarship?: boolean;
 }
 
 interface PlayerDetails {
   id: string;
   name: string;
   recruitingInfo?: RecruitData[];
+  committed: boolean;
+  teamCommittedTo: string;
+  recruitDate: {
+    year: "Junior" | "Senior";
+    day: number;
+  };
 }
 
 interface UpdatedRecruitPlayers {
@@ -32,6 +39,10 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
     try {
       const userId = user.uid;
       
+      // Fetch current day
+      const currentDayDoc = await getDoc(doc(db, "users", userId, "currentDay", "day"));
+      const currentDay = currentDayDoc.data()?.day || 1;
+
       // Fetch all team data at once
       const teamsRef = collection(db, "users", userId, "teams");
       const teamsSnap = await getDocs(teamsRef);
@@ -54,20 +65,26 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
         const teamNumber = teamDoc.id;
         const pendingActions: RecruitData[] = teamData.pendingRecruitingActions || [];
         const currentRecruits: RecruitData[] = teamData.myRecruits || [];
-
+  
         const updatedRecruits: RecruitData[] = [...currentRecruits];
-
+  
         for (const action of pendingActions) {
           const existingRecruitIndex = updatedRecruits.findIndex(
             (recruit) => recruit.playerId === action.playerId
           );
-
+  
           if (existingRecruitIndex !== -1) {
             updatedRecruits[existingRecruitIndex].points += action.points;
+            if (action.offeredScholarship) {
+              updatedRecruits[existingRecruitIndex].offeredScholarship = true;
+            }
           } else {
-            updatedRecruits.push(action);
+            updatedRecruits.push({
+              ...action,
+              offeredScholarship: action.offeredScholarship || false
+            });
           }
-
+  
           const parts = action.playerId.split('-');
           if (parts.length >= 3) {
             const recruitTeamNumber = parts[2];
@@ -88,14 +105,34 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
                 );
                 if (existingActionIndex !== -1) {
                   player.recruitingInfo[existingActionIndex].points += action.points;
+                  if (action.offeredScholarship) {
+                    player.recruitingInfo[existingActionIndex].offeredScholarship = true;
+                  }
                 } else {
-                  player.recruitingInfo.push({ playerId: teamNumber, points: action.points });
+                  player.recruitingInfo.push({
+                    playerId: teamNumber,
+                    points: action.points,
+                    offeredScholarship: action.offeredScholarship || false
+                  });
+                }
+
+                // Check if it's time for the player to commit
+                if (player.recruitDate.day === currentDay && !player.committed) {
+                  const teamsOfferedScholarship = player.recruitingInfo
+                    .filter(info => info.offeredScholarship)
+                    .map(info => info.playerId);
+                  
+                  if (teamsOfferedScholarship.length > 0) {
+                    const randomTeam = teamsOfferedScholarship[Math.floor(Math.random() * teamsOfferedScholarship.length)];
+                    player.committed = true;
+                    player.teamCommittedTo = randomTeam;
+                  }
                 }
               }
             }
           }
         }
-
+  
         // Update team document
         batch.update(teamDoc.ref, {
           myRecruits: updatedRecruits,
@@ -103,7 +140,36 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
           recruitingPoints: 150
         });
       }
-
+      for (const recruitTeamNumber in recruitDocs) {
+        const recruitTeamData = recruitDocs[recruitTeamNumber];
+        
+        if (recruitTeamData && Array.isArray(recruitTeamData.players)) {
+          if (!updatedRecruitPlayers[recruitTeamNumber]) {
+            updatedRecruitPlayers[recruitTeamNumber] = [...recruitTeamData.players];
+          }
+      
+          for (let i = 0; i < updatedRecruitPlayers[recruitTeamNumber].length; i++) {
+            const player = updatedRecruitPlayers[recruitTeamNumber][i];
+            
+            // Check if it's time for the player to commit
+            if (player.recruitDate.day === currentDay && !player.committed) {
+              if (!player.recruitingInfo) {
+                player.recruitingInfo = [];
+              }
+      
+              const teamsOfferedScholarship = player.recruitingInfo
+                .filter(info => info.offeredScholarship)
+                .map(info => info.playerId);
+              
+              if (teamsOfferedScholarship.length > 0) {
+                const randomTeam = teamsOfferedScholarship[Math.floor(Math.random() * teamsOfferedScholarship.length)];
+                player.committed = true;
+                player.teamCommittedTo = randomTeam;
+              }
+            }
+          }
+        }
+      }
       // Update recruit team documents
       for (const [recruitTeamNumber, players] of Object.entries(updatedRecruitPlayers)) {
         const recruitTeamRef = doc(db, "users", userId, "recruits", recruitTeamNumber);

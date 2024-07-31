@@ -35,7 +35,7 @@ interface Player {
 
 interface TeamData {
   recruitingPoints: number;
-  pendingRecruitingActions: Array<{ playerId: string; points: number }>;
+  pendingRecruitingActions: Array<{ playerId: string; points: number; offeredScholarship: boolean }>;
 }
 
 const HSPlayerPage: React.FC = () => {
@@ -45,6 +45,42 @@ const HSPlayerPage: React.FC = () => {
   const [teamData, setTeamData] = useState<TeamData | null>(null);
   const params = useParams();
   const playerId = params.ID as string;
+  const offerScholarship = async () => {
+    if (!auth.currentUser || !player) {
+      alert('You must be logged in to offer a scholarship.');
+      return;
+    }
+  
+    try {
+      const userId = auth.currentUser.uid;
+      const team1Ref = doc(db, "users", userId, "teams", "1");
+  
+      const docSnap = await getDoc(team1Ref);
+      if (!docSnap.exists()) {
+        alert('Team 1 document not found. Please generate teams first.');
+        return;
+      }
+  
+      const existingActions = docSnap.data().pendingRecruitingActions || [];
+      const updatedActions = existingActions.map((action: { playerId: string; points: number; offeredScholarship: boolean }) => 
+        action.playerId === player.id ? { ...action, offeredScholarship: true } : action
+      );
+  
+      if (!updatedActions.some((action: { playerId: string }) => action.playerId === player.id)) {
+        updatedActions.push({ playerId: player.id, points: 0, offeredScholarship: true });
+      }
+  
+      await updateDoc(team1Ref, {
+        pendingRecruitingActions: updatedActions
+      });
+  
+      alert(`Offered a scholarship to ${player.name}`);
+    } catch (error) {
+      console.error("Error offering scholarship: ", error);
+      alert('An error occurred while offering the scholarship.');
+    }
+  };
+  
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -184,25 +220,33 @@ const HSPlayerPage: React.FC = () => {
       </div>
   
       <div className="border p-4 rounded shadow mt-4">
-        <h2 className="text-xl font-semibold mb-2">Recruiting</h2>
-        <div className="flex space-x-2 mb-4">
-          {[...Array(11)].map((_, i) => (
-            <button 
-              key={i} 
-              onClick={() => setSelectedPoints(i)} 
-              className={`py-2 px-4 rounded ${selectedPoints === i ? 'bg-green-700 text-white' : 'bg-gray-300'}`}
-            >
-              {i}
-            </button>
-          ))}
-        </div>
-        <button 
-          onClick={assignRecruitingPoints}
-          className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-        >
-          Submit Points
-        </button>
-      </div>
+  <h2 className="text-xl font-semibold mb-2">Recruiting</h2>
+  <div className="flex space-x-2 mb-4">
+    {[...Array(11)].map((_, i) => (
+      <button 
+        key={i} 
+        onClick={() => setSelectedPoints(i)} 
+        className={`py-2 px-4 rounded ${selectedPoints === i ? 'bg-green-700 text-white' : 'bg-gray-300'}`}
+      >
+        {i}
+      </button>
+    ))}
+  </div>
+  <div className="flex space-x-2">
+    <button 
+      onClick={assignRecruitingPoints}
+      className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+    >
+      Submit Points
+    </button>
+    <button 
+      onClick={offerScholarship}
+      className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+    >
+      Offer Scholarship
+    </button>
+  </div>
+</div>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React from 'react';
 import { db, auth } from './firebaseConfig'; // Adjust the path if needed
-import { collection, doc, writeBatch } from "firebase/firestore";
+import { collection, doc, writeBatch, } from "firebase/firestore";
 import { randomNormal } from 'd3-random';
 
 interface GenerateTeamsButtonProps {
@@ -10,17 +10,24 @@ interface GenerateTeamsButtonProps {
 interface TeamData {
   players: Player[];
   recruitingPoints: number;
-  pendingRecruitingActions: [string, number][]; // Array of tuples: [playerId, points]
-  myRecruits: [string, number][];
+  pendingRecruitingActions: [string, number, boolean][]; // Array of tuples: [playerId, points, offeredScholarship]
+  myRecruits: [string, number, boolean][];
 }
 
 interface RecruitingInfo {
   teamName: string;
   pointsSpent: number;
+  offeredScholarship: boolean;
 }
 
 interface HighSchoolPlayer extends Player {
   recruitingInfo: RecruitingInfo[];
+  committed: boolean;
+  teamCommittedTo: string;
+  recruitDate: {
+    year: "Junior" | "Senior";
+    day: number;
+  };
 }
 
 interface Player {
@@ -226,6 +233,17 @@ const generateRandomHeighths = (classYear: string) => {
             })
           );
   
+          // Generate recruit date
+          const recruitDate = {
+            year: Math.random() < 0.5 ? "Junior" : "Senior",
+            day: (Math.floor(Math.random() * 10) + 1) * 3
+          };
+  
+          // Ensure seniors commit in their senior year
+          if (classYear === "Senior") {
+            recruitDate.year = "Senior";
+          }
+  
           players.push({
             id: `hs-player-${teamName}-${classYear}-${i}`,
             name: generateRandomName(),
@@ -234,8 +252,11 @@ const generateRandomHeighths = (classYear: string) => {
             position: '',
             attributes: enhancedAttributes,
             stats: generateInitialStats(),
-            recruitingInfo: [], // Initialize with an empty array
-          });
+            recruitingInfo: [],
+            committed: false,
+            teamCommittedTo: '',
+            recruitDate: recruitDate,
+          } as HighSchoolPlayer);
         }
       });
   
