@@ -10,6 +10,8 @@ interface RecruitData {
   playerId: string;
   points: number;
   recruitingInfo?: { playerId: string }[];
+  committed?: boolean;
+  teamCommittedTo?: string;
 }
 
 const MyRecruitsPage: React.FC = () => {
@@ -47,8 +49,13 @@ const MyRecruitsPage: React.FC = () => {
               const teamData = teamSnap.data();
               if (teamData && Array.isArray(teamData.players)) {
                 const player = teamData.players.find((p: any) => p.id === recruit.playerId);
-                if (player && player.recruitingInfo) {
-                  return { ...recruit, recruitingInfo: player.recruitingInfo };
+                if (player) {
+                  return { 
+                    ...recruit, 
+                    recruitingInfo: player.recruitingInfo,
+                    committed: player.committed,
+                    teamCommittedTo: player.teamCommittedTo
+                  };
                 }
               }
             }
@@ -123,27 +130,39 @@ const MyRecruitsPage: React.FC = () => {
         <p>No recruits found.</p>
       ) : (
         <ul className="space-y-2">
-          {recruits.map((recruit) => (
-            <li 
-              key={recruit.playerId} 
-              className="border p-2 rounded cursor-pointer hover:bg-gray-100 flex flex-col"
-              onClick={() => handlePlayerClick(recruit.playerId)}
-            >
-              <div className="flex justify-between items-center">
-                <div>
-                  <span className="font-semibold">Player:</span> {playerNames[recruit.playerId] || 'Loading...'}
-                  <span className="ml-4 font-semibold">Points:</span> {recruit.points}
+          {recruits.map((recruit) => {
+            const isCommittedToUs = recruit.committed && recruit.teamCommittedTo === "1";
+            const isCommittedElsewhere = recruit.committed && recruit.teamCommittedTo !== "1";
+            
+            return (
+              <li 
+                key={recruit.playerId} 
+                className={`border p-2 rounded cursor-pointer hover:bg-gray-100 flex flex-col
+                  ${isCommittedToUs ? 'bg-green-100' : ''}
+                  ${isCommittedElsewhere ? 'bg-red-100' : ''}`}
+                onClick={() => handlePlayerClick(recruit.playerId)}
+              >
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="font-semibold">Player:</span> {playerNames[recruit.playerId] || 'Loading...'}
+                    <span className="ml-4 font-semibold">Points:</span> {recruit.points}
+                  </div>
                 </div>
-              </div>
-              <div className="text-sm text-gray-600 mt-1">
-                <span className="font-semibold">Teams:</span> {
-                  recruit.recruitingInfo && recruit.recruitingInfo.length > 0
-                    ? recruit.recruitingInfo.map(info => info.playerId).join(', ')
-                    : 'No teams'
-                }
-              </div>
-            </li>
-          ))}
+                <div className="text-sm text-gray-600 mt-1">
+                  <span className="font-semibold">Teams:</span> {
+                    recruit.recruitingInfo && recruit.recruitingInfo.length > 0
+                      ? recruit.recruitingInfo.map(info => info.playerId).join(', ')
+                      : 'No teams'
+                  }
+                </div>
+                {recruit.committed && (
+                  <div className={`text-sm mt-1 ${isCommittedToUs ? 'text-green-600' : 'text-red-600'}`}>
+                    Committed to: {recruit.teamCommittedTo === "1" ? "Us" : `Team ${recruit.teamCommittedTo}`}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

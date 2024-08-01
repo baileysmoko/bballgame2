@@ -1,6 +1,6 @@
 import React from 'react';
 import { db, auth } from './firebaseConfig';
-import { doc, getDoc, updateDoc, collection, getDocs, writeBatch, runTransaction } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, getDocs, writeBatch, arrayUnion } from "firebase/firestore";
 
 interface RunRecruitsProps {
   onRecruitsProcessed: () => void;
@@ -15,6 +15,7 @@ interface RecruitData {
 interface PlayerDetails {
   id: string;
   name: string;
+  classYear: string; // Add this line
   recruitingInfo?: RecruitData[];
   committed: boolean;
   teamCommittedTo: string;
@@ -59,7 +60,8 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
       const batch = writeBatch(db);
 
       const updatedRecruitPlayers: UpdatedRecruitPlayers = {};
-
+      const commitUpdates: { [teamId: string]: { juniorCommits: string[], seniorCommits: string[] } } = {};
+      
       for (const teamDoc of teamDocs) {
         const teamData = teamDoc.data();
         const teamNumber = teamDoc.id;
@@ -131,6 +133,7 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
               }
             }
           }
+          commitUpdates[teamNumber] = { juniorCommits: [], seniorCommits: [] };
         }
   
         // Update team document
@@ -165,6 +168,19 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
                 const randomTeam = teamsOfferedScholarship[Math.floor(Math.random() * teamsOfferedScholarship.length)];
                 player.committed = true;
                 player.teamCommittedTo = randomTeam;
+      
+                // Add player to appropriate commit set
+                if (player.classYear === "Junior") {
+                  if (!commitUpdates[randomTeam]) {
+                    commitUpdates[randomTeam] = { juniorCommits: [], seniorCommits: [] };
+                  }
+                  commitUpdates[randomTeam].juniorCommits.push(player.id);
+                } else if (player.classYear === "Senior") {
+                  if (!commitUpdates[randomTeam]) {
+                    commitUpdates[randomTeam] = { juniorCommits: [], seniorCommits: [] };
+                  }
+                  commitUpdates[randomTeam].seniorCommits.push(player.id);
+                }
               }
             }
           }
@@ -174,6 +190,17 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
       for (const [recruitTeamNumber, players] of Object.entries(updatedRecruitPlayers)) {
         const recruitTeamRef = doc(db, "users", userId, "recruits", recruitTeamNumber);
         batch.update(recruitTeamRef, { players });
+      }
+      
+      for (const [teamNumber, updates] of Object.entries(commitUpdates)) {
+        const teamRef = doc(db, "users", userId, "teams", teamNumber);
+        const teamDoc = await getDoc(teamRef);
+        const teamData = teamDoc.data();
+        
+        batch.update(teamRef, {
+          juniorCommits: [...(teamData?.juniorCommits || []), ...updates.juniorCommits],
+          seniorCommits: [...(teamData?.seniorCommits || []), ...updates.seniorCommits]
+        });
       }
 
       // Commit all updates in a single batch

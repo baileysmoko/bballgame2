@@ -12,6 +12,8 @@ interface TeamData {
   recruitingPoints: number;
   pendingRecruitingActions: [string, number, boolean][]; // Array of tuples: [playerId, points, offeredScholarship]
   myRecruits: [string, number, boolean][];
+  juniorCommits: Set<string>; // New field
+  seniorCommits: Set<string>; // New field
 }
 
 interface RecruitingInfo {
@@ -187,8 +189,10 @@ const generateInitialStats = () => ({
       newTeams[teamName] = {
         players: [...starters, ...backups, ...extras],
         recruitingPoints: 150,
-        pendingRecruitingActions: [], // Initialize as an empty array
-        myRecruits: [] // Initialize as an empty array
+        pendingRecruitingActions: [],
+        myRecruits: [],
+        juniorCommits: new Set<string>(), // Initialize as an empty set
+        seniorCommits: new Set<string>(), // Initialize as an empty set
       };
     });
     return newTeams;
@@ -236,7 +240,7 @@ const generateRandomHeighths = (classYear: string) => {
           // Generate recruit date
           const recruitDate = {
             year: Math.random() < 0.5 ? "Junior" : "Senior",
-            day: (Math.floor(Math.random() * 10) + 1) * 3
+            day: (Math.floor(Math.random() * 10) + 1) * 3 + 1
           };
   
           // Ensure seniors commit in their senior year
@@ -332,7 +336,13 @@ const generateRandomHeighths = (classYear: string) => {
       const batch = writeBatch(db);
     
       for (const [teamName, teamData] of Object.entries(teams)) {
-        batch.set(doc(teamsCollectionRef, teamName), teamData);
+        // Convert Sets to Arrays
+        const teamDataToSave = {
+          ...teamData,
+          juniorCommits: Array.from(teamData.juniorCommits),
+          seniorCommits: Array.from(teamData.seniorCommits)
+        };
+        batch.set(doc(teamsCollectionRef, teamName), teamDataToSave);
       }
     
       for (const [teamName, players] of Object.entries(highSchoolTeams)) {

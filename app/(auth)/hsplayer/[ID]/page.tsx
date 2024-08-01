@@ -31,6 +31,8 @@ interface Player {
     [key: string]: number;
   };
   stats: PlayerStats;
+  committed?: boolean;
+  teamCommittedTo?: string;
 }
 
 interface TeamData {
@@ -46,8 +48,8 @@ const HSPlayerPage: React.FC = () => {
   const params = useParams();
   const playerId = params.ID as string;
   const offerScholarship = async () => {
-    if (!auth.currentUser || !player) {
-      alert('You must be logged in to offer a scholarship.');
+    if (!auth.currentUser || !player || player.committed) {
+      alert('You cannot offer a scholarship to this player.');
       return;
     }
   
@@ -111,7 +113,11 @@ const HSPlayerPage: React.FC = () => {
         if (teamData && Array.isArray(teamData.players)) {
           const playerData = teamData.players.find(p => p.id === playerId);
           if (playerData) {
-            setPlayer(playerData);
+            setPlayer({
+              ...playerData,
+              committed: playerData.committed || false,
+              teamCommittedTo: playerData.teamCommittedTo || null
+            });
           } else {
             console.log("Player not found in team data");
           }
@@ -142,8 +148,8 @@ const HSPlayerPage: React.FC = () => {
   };
 
   const assignRecruitingPoints = async () => {
-    if (!auth.currentUser || !player) {
-      alert('You must be logged in to assign recruiting points.');
+    if (!auth.currentUser || !player || player.committed) {
+      alert('You cannot assign recruiting points to this player.');
       return;
     }
 
@@ -220,35 +226,46 @@ const HSPlayerPage: React.FC = () => {
       </div>
   
       <div className="border p-4 rounded shadow mt-4">
-  <h2 className="text-xl font-semibold mb-2">Recruiting</h2>
-  <div className="flex space-x-2 mb-4">
-    {[...Array(11)].map((_, i) => (
-      <button 
-        key={i} 
-        onClick={() => setSelectedPoints(i)} 
-        className={`py-2 px-4 rounded ${selectedPoints === i ? 'bg-green-700 text-white' : 'bg-gray-300'}`}
-      >
-        {i}
-      </button>
-    ))}
-  </div>
-  <div className="flex space-x-2">
-    <button 
-      onClick={assignRecruitingPoints}
-      className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-    >
-      Submit Points
-    </button>
-    <button 
-      onClick={offerScholarship}
-      className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-    >
-      Offer Scholarship
-    </button>
-  </div>
-</div>
+      <h2 className="text-xl font-semibold mb-2">Recruiting</h2>
+      {player.committed ? (
+        <p className="text-red-500 mb-4">
+          This player has already committed to {player.teamCommittedTo === "1" ? "your team" : `Team ${player.teamCommittedTo}`}.
+        </p>
+      ) : (
+        <>
+          <div className="flex space-x-2 mb-4">
+            {[...Array(11)].map((_, i) => (
+              <button 
+                key={i} 
+                onClick={() => setSelectedPoints(i)} 
+                className={`py-2 px-4 rounded ${selectedPoints === i ? 'bg-green-700 text-white' : 'bg-gray-300'}`}
+                disabled={player.committed}
+              >
+                {i}
+              </button>
+            ))}
+          </div>
+          <div className="flex space-x-2">
+            <button 
+              onClick={assignRecruitingPoints}
+              className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
+              disabled={player.committed}
+            >
+              Submit Points
+            </button>
+            <button 
+              onClick={offerScholarship}
+              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
+              disabled={player.committed}
+            >
+              Offer Scholarship
+            </button>
+          </div>
+        </>
+      )}
     </div>
-  );
+  </div>
+);
 };
 
 export default HSPlayerPage;

@@ -5,6 +5,7 @@ import { db, auth } from '../../firebaseConfig';
 import { collection, getDocs, doc, updateDoc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import GenerateTeamsButton from '../../GenerateTeamsButton';
+import { useRouter } from 'next/navigation';
 
 interface PlayerStats {
   gamesPlayed: number;
@@ -31,7 +32,10 @@ interface Player {
     [key: string]: number;
   };
   stats: PlayerStats;
+  committed?: boolean;
+  teamCommittedTo?: string;
 }
+
 
 interface TeamData {
   recruitingPoints: number;
@@ -46,6 +50,7 @@ const RecruitsPage: React.FC = () => {
   const [teamsGenerated, setTeamsGenerated] = useState(false);
   const [selectedPoints, setSelectedPoints] = useState<number>(0);
   const [teamData, setTeamData] = useState<TeamData | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -130,11 +135,16 @@ const RecruitsPage: React.FC = () => {
       const recruitsCollectionRef = collection(db, "users", userId, "recruits");
       const querySnapshot = await getDocs(recruitsCollectionRef);
       const fetchedRecruits: { [key: string]: Player[] } = {};
-
+  
       querySnapshot.forEach((doc) => {
-        fetchedRecruits[doc.id] = doc.data().players;
+        const data = doc.data().players;
+        fetchedRecruits[doc.id] = data.map((player: Player) => ({
+          ...player,
+          committed: player.committed,
+          teamCommittedTo: player.teamCommittedTo,
+        }));
       });
-
+  
       setRecruits(fetchedRecruits);
       setTeamsGenerated(Object.keys(fetchedRecruits).length > 0);
     } catch (error) {
@@ -145,7 +155,7 @@ const RecruitsPage: React.FC = () => {
       setLoading(false);
     }
   };
-
+  
   const handleTeamsGenerated = () => {
     if (auth.currentUser) {
       fetchRecruits(auth.currentUser.uid);
@@ -153,76 +163,35 @@ const RecruitsPage: React.FC = () => {
   };
 
   const selectPlayer = (player: Player) => {
-    setSelectedPlayer(player);
-    if (teamData) {
-      const playerAction = teamData.pendingRecruitingActions.find(action => action.playerId === player.id);
-      setSelectedPoints(playerAction ? playerAction.points : 0);
-    }
+    router.push(`/hsplayer/${player.id}`);
   };
 
-  const renderPlayerCard = (player: Player) => (
-    <div key={player.id} className="border p-4 rounded shadow cursor-pointer" onClick={() => selectPlayer(player)}>
-      <h3 className="font-bold">{player.name}</h3>
-      <p>Position: {player.position}</p>
-      <p>Class: {player.classYear}</p>
-      <p>Height: {Math.floor(player.height / 12)}'{player.height % 12}"</p>
-      <div className="mt-2">
-        <h4 className="font-semibold">Stats:</h4>
-        <p>Games: {player.stats.gamesPlayed}</p>
-        <p>PPG: {(player.stats.points / player.stats.gamesPlayed).toFixed(1)}</p>
-        <p>RPG: {(player.stats.rebounds / player.stats.gamesPlayed).toFixed(1)}</p>
-        <p>APG: {(player.stats.assists / player.stats.gamesPlayed).toFixed(1)}</p>
-      </div>
-      <p className="text-blue-500 mt-2">Click for full details</p>
-    </div>
-  );
-
-  const renderPlayerDetails = (player: Player) => (
-    <div className="border p-4 rounded shadow">
-      <h3 className="font-bold text-xl mb-2">{player.name} - Player Details</h3>
-      <p>Position: {player.position}</p>
-      <p>Class: {player.classYear}</p>
-      <p>Height: {Math.floor(player.height / 12)}'{player.height % 12}"</p>
-      <h4 className="font-semibold mt-2">Attributes:</h4>
-      <h4 className="font-semibold mt-2">Stats:</h4>
-      <ul>
-        <li>Games Played: {player.stats.gamesPlayed}</li>
-        <li>Points: ({(player.stats.points / player.stats.gamesPlayed).toFixed(1)} PPG)</li>
-        <li>Rebounds: ({(player.stats.rebounds / player.stats.gamesPlayed).toFixed(1)} RPG)</li>
-        <li>Assists: ({(player.stats.assists / player.stats.gamesPlayed).toFixed(1)} APG)</li>
-        <li>Steals: ({(player.stats.steals / player.stats.gamesPlayed).toFixed(1)} SPG)</li>
-        <li>Blocks: ({(player.stats.blocks / player.stats.gamesPlayed).toFixed(1)} BPG)</li>
-        <li>FG: ({((player.stats.fgm / player.stats.fga) * 100).toFixed(1)}%)</li>
-        <li>3PT: ({((player.stats.tpm / player.stats.tpa) * 100).toFixed(1)}%)</li>
-        <li>FT: ({((player.stats.ftm / player.stats.fta) * 100).toFixed(1)}%)</li>
-      </ul>
-      <div className="mt-4 flex space-x-2">
-        <button 
-          onClick={() => setSelectedPlayer(null)}
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-        >
-          Back to Team
-        </button>
-        <div className="flex space-x-2">
-          {[...Array(11)].map((_, i) => (
-            <button 
-              key={i} 
-              onClick={() => setSelectedPoints(i)} 
-              className={`py-2 px-4 rounded ${selectedPoints === i ? 'bg-green-700 text-white' : 'bg-gray-300'}`}
-            >
-              {i}
-            </button>
-          ))}
+  const renderPlayerCard = (player: Player) => {
+    const isCommittedToUs = player.committed && player.teamCommittedTo === "1";
+    const isCommittedElsewhere = player.committed && player.teamCommittedTo !== "1";
+  
+    return (
+      <div
+        key={player.id}
+        className={`border p-4 rounded shadow cursor-pointer ${isCommittedToUs ? 'bg-green-100' : ''} ${isCommittedElsewhere ? 'bg-red-100' : ''}`}
+        onClick={() => selectPlayer(player)}
+      >
+        <h3 className="font-bold">{player.name}</h3>
+        <p>Position: {player.position}</p>
+        <p>Class: {player.classYear}</p>
+        <p>Height: {Math.floor(player.height / 12)}'{player.height % 12}"</p>
+        <div className="mt-2">
+          <h4 className="font-semibold">Stats:</h4>
+          <p>Games: {player.stats.gamesPlayed}</p>
+          <p>PPG: {(player.stats.points / player.stats.gamesPlayed).toFixed(1)}</p>
+          <p>RPG: {(player.stats.rebounds / player.stats.gamesPlayed).toFixed(1)}</p>
+          <p>APG: {(player.stats.assists / player.stats.gamesPlayed).toFixed(1)}</p>
         </div>
-        <button 
-          onClick={() => assignRecruitingPoints(player)}
-          className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-        >
-          Submit Points
-        </button>
+        <p className="text-blue-500 mt-2">Click for full details</p>
       </div>
-    </div>
-  );
+    );
+  };
+  
 
   if (loading) {
     return <div>Loading...</div>;
@@ -237,9 +206,7 @@ const RecruitsPage: React.FC = () => {
           <GenerateTeamsButton onTeamsGenerated={handleTeamsGenerated} setLoading={setLoading} />
         </div>
       )}
-      {selectedPlayer ? (
-        renderPlayerDetails(selectedPlayer)
-      ) : selectedTeam ? (
+      {selectedTeam ? (
         <div>
           <h2 className="text-xl font-semibold mb-2">Team {selectedTeam}</h2>
           <button 
