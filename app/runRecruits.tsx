@@ -61,6 +61,17 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
 
       const updatedRecruitPlayers: UpdatedRecruitPlayers = {};
       const commitUpdates: { [teamId: string]: { juniorCommits: string[], seniorCommits: string[] } } = {};
+      const teamCommitCounts: { [teamId: string]: { juniors: number, seniors: number } } = {};
+
+      // Initialize commit counts for each team
+      for (const teamDoc of teamDocs) {
+        const teamNumber = teamDoc.id;
+        const teamData = teamDoc.data();
+        teamCommitCounts[teamNumber] = {
+          juniors: (teamData.juniorCommits || []).length,
+          seniors: (teamData.seniorCommits || []).length
+        };
+      }
       
       for (const teamDoc of teamDocs) {
         const teamData = teamDoc.data();
@@ -154,7 +165,6 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
           for (let i = 0; i < updatedRecruitPlayers[recruitTeamNumber].length; i++) {
             const player = updatedRecruitPlayers[recruitTeamNumber][i];
             
-            // Check if it's time for the player to commit
             if (player.recruitDate.day === currentDay && !player.committed) {
               if (!player.recruitingInfo) {
                 player.recruitingInfo = [];
@@ -162,24 +172,30 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
       
               const teamsOfferedScholarship = player.recruitingInfo
                 .filter(info => info.offeredScholarship)
-                .map(info => info.playerId);
+                .map(info => info.playerId)
+                .filter(teamId => {
+                  const commitCount = teamCommitCounts[teamId];
+                  return (player.classYear === "Junior" && commitCount.juniors < 3) ||
+                         (player.classYear === "Senior" && commitCount.seniors < 3);
+                });
               
               if (teamsOfferedScholarship.length > 0) {
                 const randomTeam = teamsOfferedScholarship[Math.floor(Math.random() * teamsOfferedScholarship.length)];
                 player.committed = true;
                 player.teamCommittedTo = randomTeam;
       
-                // Add player to appropriate commit set
                 if (player.classYear === "Junior") {
                   if (!commitUpdates[randomTeam]) {
                     commitUpdates[randomTeam] = { juniorCommits: [], seniorCommits: [] };
                   }
                   commitUpdates[randomTeam].juniorCommits.push(player.id);
+                  teamCommitCounts[randomTeam].juniors++;
                 } else if (player.classYear === "Senior") {
                   if (!commitUpdates[randomTeam]) {
                     commitUpdates[randomTeam] = { juniorCommits: [], seniorCommits: [] };
                   }
                   commitUpdates[randomTeam].seniorCommits.push(player.id);
+                  teamCommitCounts[randomTeam].seniors++;
                 }
               }
             }
