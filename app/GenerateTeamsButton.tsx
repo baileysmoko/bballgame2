@@ -1,6 +1,6 @@
 import React from 'react';
 import { db, auth } from './firebaseConfig'; // Adjust the path if needed
-import { collection, doc, writeBatch, } from "firebase/firestore";
+import { collection, doc, writeBatch, setDoc} from "firebase/firestore";
 import { randomNormal } from 'd3-random';
 
 interface GenerateTeamsButtonProps {
@@ -68,37 +68,26 @@ const generateRandomName = () => {
   return `${firstName} ${lastName}`;
 };
 
-const generateRandomAttributes = (isHighSchool: boolean) => {
-    
-    const attributes = {
-      threePoint: Math.random() * 75,
-      midRange: Math.random() * 75,
-      closeRange: Math.random() * 75,
-      freeThrow: Math.random() * 75,
-      passSteal: Math.random() * 75,
-      dribbleSteal: Math.random() * 75,
-      block: Math.random() * 75,
-      passing: Math.random() * 75,
-      dribbling: Math.random() * 75,
-      offensiveRebounding: Math.random() * 75,
-      defensiveRebounding: Math.random() * 75,
-      defensiveFoul: Math.random() * 75,
-      shotIQ: Math.random() * 75,
-      passingIQ: Math.random() * 75,
-      createSpace: Math.random() * 75,
-      defensiveQuickness: Math.random() * 75,
-      stamina: Math.random() * 75
-    };
-  
-    const progressionAttributes = Object.fromEntries(
-        Object.keys(attributes).map(key => [`${key}Progression`, Math.max(0, Math.random() * 8)])
-    );
-
-    // Add height progression
-    const heightProgression = isHighSchool ? Math.max(0, Math.random() * 6) : 0;
-    progressionAttributes['heightProgression'] = heightProgression;
-  
-    return { ...attributes, ...progressionAttributes };
+const generateRandomAttributes = () => {
+  return {
+    threePoint: Math.random() * 75,
+    midRange: Math.random() * 75,
+    closeRange: Math.random() * 75,
+    freeThrow: Math.random() * 75,
+    passSteal: Math.random() * 75,
+    dribbleSteal: Math.random() * 75,
+    block: Math.random() * 75,
+    passing: Math.random() * 75,
+    dribbling: Math.random() * 75,
+    offensiveRebounding: Math.random() * 75,
+    defensiveRebounding: Math.random() * 75,
+    defensiveFoul: Math.random() * 75,
+    shotIQ: Math.random() * 75,
+    passingIQ: Math.random() * 75,
+    createSpace: Math.random() * 75,
+    defensiveQuickness: Math.random() * 75,
+    stamina: Math.random() * 75
+  };
 };
   
 const generateRandomHeight = () => {
@@ -131,7 +120,7 @@ const generateInitialStats = () => ({
   
       classYears.forEach(classYear => {
         for (let i = 0; i < 3; i++) {
-          const baseAttributes = generateRandomAttributes(false); // false for college players
+          const baseAttributes = generateRandomAttributes();
           let bonus = 0;
           if (classYear === "Sophomore") bonus = 4;
           if (classYear === "Junior") bonus = 8;
@@ -139,12 +128,7 @@ const generateInitialStats = () => ({
   
           const enhancedAttributes = Object.fromEntries(
             Object.entries(baseAttributes).map(([key, value]) => {
-              // Apply bonus only to normal attributes (not ending with 'Progression')
-              if (!key.endsWith('Progression')) {
-                return [key, Math.min(value + 16 + bonus, 100)];
-              }
-              // Return progression attributes unchanged
-              return [key, value];
+              return [key, Math.min(value + 16 + bonus, 100)];
             })
           );
           players.push({
@@ -154,7 +138,7 @@ const generateInitialStats = () => ({
             height: generateRandomHeight(),
             position: '',
             attributes: enhancedAttributes,
-            stats: generateInitialStats(), // Add this line
+            stats: generateInitialStats(),
           });
         }
       });
@@ -191,8 +175,8 @@ const generateInitialStats = () => ({
         recruitingPoints: 150,
         pendingRecruitingActions: [],
         myRecruits: [],
-        juniorCommits: new Set<string>(), // Initialize as an empty set
-        seniorCommits: new Set<string>(), // Initialize as an empty set
+        juniorCommits: new Set<string>(),
+        seniorCommits: new Set<string>(),
       };
     });
     return newTeams;
@@ -222,7 +206,7 @@ const generateRandomHeighths = (classYear: string) => {
   
       classYears.forEach(classYear => {
         for (let i = 0; i < 3; i++) {
-          const baseAttributes = generateRandomAttributes(true);
+          const baseAttributes = generateRandomAttributes();
           let bonus = 0;
           if (classYear === "Sophomore") bonus = 4;
           if (classYear === "Junior") bonus = 8;
@@ -230,10 +214,7 @@ const generateRandomHeighths = (classYear: string) => {
   
           const enhancedAttributes = Object.fromEntries(
             Object.entries(baseAttributes).map(([key, value]) => {
-              if (!key.endsWith('Progression')) {
-                return [key, Math.min(value + bonus, 100)];
-              }
-              return [key, value];
+              return [key, Math.min(value + bonus, 100)];
             })
           );
   
@@ -318,6 +299,8 @@ const generateRandomHeighths = (classYear: string) => {
   
         // Generate and upload schedule
         await generateAndUploadSchedule(user.uid, teamNames);
+
+        await initializeCurrentDay(user.uid);
   
         onTeamsGenerated(teams);
         alert('Teams, recruits, and schedule generated and saved successfully!');
@@ -354,12 +337,12 @@ const generateRandomHeighths = (classYear: string) => {
   
     const generateAndUploadSchedule = async (userId: string, teamNames: string[]) => {
       const scheduleCollectionRef = collection(db, "users", userId, "schedule");
-      const totalDays = 21;
-      const matchupsPerDay = teamNames.length / 2;
-  
-      for (let day = 1; day <= totalDays; day++) {
+      const gameDays = [1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18, 19, 21, 22, 23, 25, 26, 27];
+      const matchupsPerDay = 32; // Exactly 32 matches per day
+    
+      for (const day of gameDays) {
         await new Promise<void>(resolve => setTimeout(() => resolve(), 0)); // Allow UI to update
-  
+    
         const daySchedule = generateDaySchedule(teamNames, day, matchupsPerDay);
         
         const batch = writeBatch(db);
@@ -367,38 +350,30 @@ const generateRandomHeighths = (classYear: string) => {
         await batch.commit();
       }
     };
+    const initializeCurrentDay = async (userId: string) => {
+      const currentDayDocRef = doc(db, "users", userId, "currentDay", "day");
+      await setDoc(currentDayDocRef, { day: 1 });
+    };
   
     const generateDaySchedule = (teamNames: string[], day: number, matchupsPerDay: number) => {
       const daySchedule: { [matchup: string]: [string, string] } = {};
-      const dayMatches: Set<string> = new Set();
-  
+      const availableTeams = [...teamNames];
+    
       for (let match = 1; match <= matchupsPerDay; match++) {
-        let team1: string, team2: string;
-        let attempts = 0;
-        const maxAttempts = 1000;
-  
-        do {
-          team1 = teamNames[Math.floor(Math.random() * teamNames.length)];
-          team2 = teamNames[Math.floor(Math.random() * teamNames.length)];
-          attempts++;
-  
-          if (attempts > maxAttempts) {
-            console.warn(`Could not find a valid matchup for day ${day}, match ${match}`);
-            break;
-          }
-        } while (
-          team1 === team2 ||
-          dayMatches.has(team1) ||
-          dayMatches.has(team2)
-        );
-  
-        if (attempts <= maxAttempts) {
-          dayMatches.add(team1);
-          dayMatches.add(team2);
-          daySchedule[`Match${match}`] = [team1, team2];
+        if (availableTeams.length < 2) {
+          console.warn(`Not enough teams left for day ${day}, match ${match}`);
+          break;
         }
+    
+        const team1Index = Math.floor(Math.random() * availableTeams.length);
+        const team1 = availableTeams.splice(team1Index, 1)[0];
+    
+        const team2Index = Math.floor(Math.random() * (availableTeams.length - 1));
+        const team2 = availableTeams.splice(team2Index, 1)[0];
+    
+        daySchedule[`Match${match}`] = [team1, team2];
       }
-  
+    
       return daySchedule;
     };
   
@@ -413,4 +388,3 @@ const generateRandomHeighths = (classYear: string) => {
   };
   
   export default GenerateTeamsButton;
-  

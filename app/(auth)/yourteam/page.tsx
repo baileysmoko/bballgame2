@@ -71,8 +71,9 @@ const YourTeam: React.FC = () => {
   };
 
   const formatHeight = (heightInInches: number) => {
-    const feet = Math.floor(heightInInches / 12);
-    const inches = heightInInches % 12;
+    const roundedHeight = Math.round(heightInInches);
+    const feet = Math.floor(roundedHeight / 12);
+    const inches = roundedHeight % 12;
     return `${feet}-${inches}`;
   };
 

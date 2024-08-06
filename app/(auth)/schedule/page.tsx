@@ -8,6 +8,7 @@ import GenerateTeamsButton from '../../GenerateTeamsButton';
 import SimulateNextDayButton from '../../SimulateNextDayButton';
 import Link from 'next/link';
 import RunRecruits from '../../runRecruits';
+import RolloverButton from '../../rollover';
 
 interface ScheduleData {
   [day: string]: {
@@ -47,6 +48,13 @@ const SchedulePage: React.FC = () => {
       fetchGameResults(auth.currentUser.uid, currentDay);
     }
   }, [currentDay]);
+  const handleRolloverComplete = useCallback(() => {
+    // Refresh the schedule or take other actions after rollover
+    if (auth.currentUser) {
+      fetchSchedule(auth.currentUser.uid);
+      fetchCurrentDay(auth.currentUser.uid);
+    }
+  }, []);
 
   const fetchSchedule = async (userId: string) => {
     try {
@@ -166,12 +174,13 @@ const SchedulePage: React.FC = () => {
         <>
           <div>{renderSchedule()}</div>
           <div className="flex space-x-4">
-            <SimulateNextDayButton
-              userId={auth.currentUser!.uid}
-              onSimulationComplete={handleSimulationComplete}
-            />
-            <RunRecruits onRecruitsProcessed={handleRecruitsProcessed} />
-          </div>
+  <SimulateNextDayButton
+    userId={auth.currentUser!.uid}
+    onSimulationComplete={handleSimulationComplete}
+  />
+  <RunRecruits onRecruitsProcessed={handleRecruitsProcessed} />
+  <RolloverButton onRolloverComplete={handleRolloverComplete} />
+</div>
         </>
       ) : (
         <GenerateTeamsButton

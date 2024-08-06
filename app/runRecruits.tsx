@@ -165,11 +165,13 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
           for (let i = 0; i < updatedRecruitPlayers[recruitTeamNumber].length; i++) {
             const player = updatedRecruitPlayers[recruitTeamNumber][i];
             
-            if (player.recruitDate.day === currentDay && !player.committed) {
+            if (player.recruitDate.day === currentDay && 
+              player.recruitDate.year === player.classYear && 
+              !player.committed) {
               if (!player.recruitingInfo) {
                 player.recruitingInfo = [];
               }
-      
+          
               const teamsOfferedScholarship = player.recruitingInfo
                 .filter(info => info.offeredScholarship)
                 .map(info => info.playerId)
@@ -183,7 +185,7 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
                 const randomTeam = teamsOfferedScholarship[Math.floor(Math.random() * teamsOfferedScholarship.length)];
                 player.committed = true;
                 player.teamCommittedTo = randomTeam;
-      
+          
                 if (player.classYear === "Junior") {
                   if (!commitUpdates[randomTeam]) {
                     commitUpdates[randomTeam] = { juniorCommits: [], seniorCommits: [] };
@@ -197,6 +199,11 @@ const RunRecruits: React.FC<RunRecruitsProps> = ({ onRecruitsProcessed }) => {
                   commitUpdates[randomTeam].seniorCommits.push(player.id);
                   teamCommitCounts[randomTeam].seniors++;
                 }
+              } else {
+                // Player didn't commit, update their recruit date to day 31 of their senior year
+                player.recruitDate.year = "Senior";
+                player.recruitDate.day = 31;
+                console.log(`Updated recruit date for player ${player.id} to Senior year, day 31`);
               }
             }
           }
