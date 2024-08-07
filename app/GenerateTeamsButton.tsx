@@ -1,7 +1,7 @@
 import React from 'react';
 import { db, auth } from './firebaseConfig'; // Adjust the path if needed
 import { collection, doc, writeBatch, setDoc} from "firebase/firestore";
-import { randomNormal } from 'd3-random';
+import { randomNormal, randomUniform } from 'd3-random';
 
 interface GenerateTeamsButtonProps {
   onTeamsGenerated: (teams: any) => void;
@@ -29,6 +29,10 @@ interface HighSchoolPlayer extends Player {
   recruitDate: {
     year: "Junior" | "Senior";
     day: number;
+  };
+  scout: number; // New attribute
+  scoutedAttributes: {
+    [key: string]: number;
   };
 }
 
@@ -61,6 +65,36 @@ interface Player {
 const firstNames = ["Michael", "LeBron", "Kobe", "Stephen", "Kevin", "Shaquille", "Tim", "Magic", "Larry", "Kareem"];
 const lastNames = ["Jordan", "James", "Bryant", "Curry", "Durant", "O'Neal", "Duncan", "Johnson", "Bird", "Abdul-Jabbar"];
 const classYears = ["Freshman", "Sophomore", "Junior", "Senior"];
+// Generate scout value based on class year
+const generateScoutValue = (classYear: string) => {
+  let scoutValue;
+  switch (classYear) {
+    case 'Freshman':
+      scoutValue = randomUniform(10, 20)();
+      break;
+    case 'Sophomore':
+      scoutValue = randomUniform(6.7, 16.7)();
+      break;
+    case 'Junior':
+      scoutValue = randomUniform(3.3, 13.3)();
+      break;
+    case 'Senior':
+      scoutValue = randomUniform(0, 10)();
+      break;
+    default:
+      scoutValue = 0;
+      break;
+  }
+  return scoutValue;
+};
+const generateScoutedAttributes = (attributes: { [key: string]: number }, scout: number) => {
+  const scoutedAttributes: { [key: string]: number } = {};
+  for (const [key, value] of Object.entries(attributes)) {
+    const scoutedValue = randomUniform(value - scout, value + scout)();
+    scoutedAttributes[key] = Math.max(0, Math.min(100, scoutedValue)); // Ensure values are between 0 and 100
+  }
+  return scoutedAttributes;
+};
 
 const generateRandomName = () => {
   const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
@@ -228,6 +262,11 @@ const generateRandomHeighths = (classYear: string) => {
           if (classYear === "Senior") {
             recruitDate.year = "Senior";
           }
+          // Generate scout value
+        const scout = generateScoutValue(classYear);
+
+        // Generate scouted attributes
+        const scoutedAttributes = generateScoutedAttributes(enhancedAttributes, scout);
   
           players.push({
             id: `hs-player-${teamName}-${classYear}-${i}`,
@@ -241,6 +280,8 @@ const generateRandomHeighths = (classYear: string) => {
             committed: false,
             teamCommittedTo: '',
             recruitDate: recruitDate,
+            scout: scout,
+            scoutedAttributes: scoutedAttributes
           } as HighSchoolPlayer);
         }
       });

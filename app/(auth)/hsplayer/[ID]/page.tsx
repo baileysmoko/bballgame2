@@ -33,6 +33,10 @@ interface Player {
   stats: PlayerStats;
   committed?: boolean;
   teamCommittedTo?: string;
+  scout: number;
+  scoutedAttributes: {
+    [key: string]: number;
+  };
 }
 
 interface TeamData {
@@ -96,6 +100,40 @@ const HSPlayerPage: React.FC = () => {
 
     return () => unsubscribe();
   }, [playerId]);
+  const getRating = (average: number): string => {
+    if (average >= 0 && average < 20) return 'None';
+    if (average >= 20 && average < 40) return 'Poor';
+    if (average >= 40 && average < 60) return 'Fair';
+    if (average >= 60 && average < 80) return 'Good';
+    if (average >= 80 && average <= 100) return 'Exc';
+    return 'Unknown';
+  };
+
+  const calculateRatings = (player: Player) => {
+    const shooting = (player.scoutedAttributes.threePoint + player.scoutedAttributes.midRange + player.scoutedAttributes.closeRange + player.scoutedAttributes.freeThrow) / 4;
+    const defense = (player.scoutedAttributes.passSteal + player.scoutedAttributes.dribbleSteal + player.scoutedAttributes.block) / 3;
+    const hands = (player.scoutedAttributes.passing + player.scoutedAttributes.dribbling) / 2;
+    const rebounding = (player.scoutedAttributes.offensiveRebounding + player.scoutedAttributes.defensiveRebounding) / 2;
+    const intelligence = (player.scoutedAttributes.defensiveFoul + player.scoutedAttributes.shotIQ + player.scoutedAttributes.passingIQ) / 3;
+    const athleticism = (player.scoutedAttributes.createSpace + player.scoutedAttributes.defensiveQuickness + player.scoutedAttributes.stamina) / 3;
+
+    return {
+      shooting: getRating(shooting),
+      defense: getRating(defense),
+      hands: getRating(hands),
+      rebounding: getRating(rebounding),
+      intelligence: getRating(intelligence),
+      athleticism: getRating(athleticism),
+    };
+  };
+
+  const getScoutRating = (scout: number): string => {
+    if (scout >= 15 && scout <= 20) return 'Poor';
+    if (scout >= 10 && scout < 15) return 'Fair';
+    if (scout >= 5 && scout < 10) return 'Good';
+    if (scout >= 0 && scout < 5) return 'Exc';
+    return 'Unknown';
+  };
 
   const fetchPlayerData = async (userId: string, playerId: string) => {
     try {
@@ -194,6 +232,8 @@ const HSPlayerPage: React.FC = () => {
   if (!player) {
     return <div>Player not found</div>;
   }
+  const ratings = calculateRatings(player);
+  const scoutRating = getScoutRating(player.scout);
 
   return (
     <div className="container mx-auto p-4">
@@ -201,16 +241,32 @@ const HSPlayerPage: React.FC = () => {
         <h1 className="text-3xl font-bold mb-4">{player.name}</h1>
         <p className="text-xl mb-2">Position: {player.position} | Class: {player.classYear} | Height: {Math.floor(player.height / 12)}'{player.height % 12}"</p>
         
-        <h2 className="text-2xl font-semibold mt-6 mb-2">Attributes</h2>
-        <ul className="grid grid-cols-2 gap-2 mb-6">
-          {Object.entries(player.attributes).map(([key, value]) => (
-            <li key={key} className="flex justify-between">
-              <span>{key}:</span>
-              <span>{value}</span>
-            </li>
-          ))}
-        </ul>
-  
+        <h2 className="text-2xl font-semibold mt-6 mb-2">Scouted Attributes</h2>
+        <table className="min-w-full bg-gray-800 rounded-lg">
+          <thead>
+            <tr>
+              <th className="px-4 py-2">Scout</th>
+              <th className="px-4 py-2">Shooting</th>
+              <th className="px-4 py-2">Defense</th>
+              <th className="px-4 py-2">Hands</th>
+              <th className="px-4 py-2">Rebounding</th>
+              <th className="px-4 py-2">Intelligence</th>
+              <th className="px-4 py-2">Athleticism</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="px-4 py-2">{scoutRating}</td>
+              <td className="px-4 py-2">{ratings.shooting}</td>
+              <td className="px-4 py-2">{ratings.defense}</td>
+              <td className="px-4 py-2">{ratings.hands}</td>
+              <td className="px-4 py-2">{ratings.rebounding}</td>
+              <td className="px-4 py-2">{ratings.intelligence}</td>
+              <td className="px-4 py-2">{ratings.athleticism}</td>
+            </tr>
+          </tbody>
+        </table>
+        
         <h2 className="text-2xl font-semibold mt-6 mb-2">Stats</h2>
         <ul className="grid grid-cols-2 gap-2">
           <li>Games Played: {player.stats.gamesPlayed}</li>
@@ -226,46 +282,46 @@ const HSPlayerPage: React.FC = () => {
       </div>
   
       <div className="border p-4 rounded shadow mt-4">
-      <h2 className="text-xl font-semibold mb-2">Recruiting</h2>
-      {player.committed ? (
-        <p className="text-red-500 mb-4">
-          This player has already committed to {player.teamCommittedTo === "1" ? "your team" : `Team ${player.teamCommittedTo}`}.
-        </p>
-      ) : (
-        <>
-          <div className="flex space-x-2 mb-4">
-            {[...Array(11)].map((_, i) => (
+        <h2 className="text-xl font-semibold mb-2">Recruiting</h2>
+        {player.committed ? (
+          <p className="text-red-500 mb-4">
+            This player has already committed to {player.teamCommittedTo === "1" ? "your team" : `Team ${player.teamCommittedTo}`}.
+          </p>
+        ) : (
+          <>
+            <div className="flex space-x-2 mb-4">
+              {[...Array(11)].map((_, i) => (
+                <button 
+                  key={i} 
+                  onClick={() => setSelectedPoints(i)} 
+                  className={`py-2 px-4 rounded ${selectedPoints === i ? 'bg-green-700 text-white' : 'bg-gray-300'}`}
+                  disabled={player.committed}
+                >
+                  {i}
+                </button>
+              ))}
+            </div>
+            <div className="flex space-x-2">
               <button 
-                key={i} 
-                onClick={() => setSelectedPoints(i)} 
-                className={`py-2 px-4 rounded ${selectedPoints === i ? 'bg-green-700 text-white' : 'bg-gray-300'}`}
+                onClick={assignRecruitingPoints}
+                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
                 disabled={player.committed}
               >
-                {i}
+                Submit Points
               </button>
-            ))}
-          </div>
-          <div className="flex space-x-2">
-            <button 
-              onClick={assignRecruitingPoints}
-              className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
-              disabled={player.committed}
-            >
-              Submit Points
-            </button>
-            <button 
-              onClick={offerScholarship}
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
-              disabled={player.committed}
-            >
-              Offer Scholarship
-            </button>
-          </div>
-        </>
-      )}
+              <button 
+                onClick={offerScholarship}
+                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
+                disabled={player.committed}
+              >
+                Offer Scholarship
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
 };
 
 export default HSPlayerPage;
