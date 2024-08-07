@@ -2,6 +2,7 @@ import React from 'react';
 import { db, auth } from './firebaseConfig';
 import { collection, doc, writeBatch, getDocs, getDoc, updateDoc } from "firebase/firestore";
 import { randomNormal, randomUniform } from 'd3-random';
+import { generateAndUploadSchedule } from './helper';
 
 interface RolloverButtonProps {
   onRolloverComplete: () => void;
@@ -227,6 +228,24 @@ const RolloverButton: React.FC<RolloverButtonProps> = ({ onRolloverComplete }) =
         player.totalAttributes = Object.values(player.attributes).reduce((sum, value) => sum + value, 0);
         return player;
     };
+    const deleteCurrentScheduleAndResults = async (userId: string) => {
+        const scheduleRef = collection(db, "users", userId, "schedule");
+        const scheduleSnap = await getDocs(scheduleRef);
+        const gameResultsRef = collection(db, "users", userId, "gameResults");
+        const gameResultsSnap = await getDocs(gameResultsRef);
+        
+        const batch = writeBatch(db);
+        
+        scheduleSnap.docs.forEach((docSnapshot) => {
+          batch.delete(docSnapshot.ref);
+        });
+        
+        gameResultsSnap.docs.forEach((docSnapshot) => {
+          batch.delete(docSnapshot.ref);
+        });
+        
+        await batch.commit();
+      };
 
     const handleRollover = async () => {
         const user = auth.currentUser;
@@ -242,10 +261,16 @@ const RolloverButton: React.FC<RolloverButtonProps> = ({ onRolloverComplete }) =
           // Fetch all recruit teams
           const recruitsRef = collection(db, "users", userId, "recruits");
           const recruitsSnap = await getDocs(recruitsRef);
+
+          await deleteCurrentScheduleAndResults(userId);
       
           // Fetch all college teams
           const teamsRef = collection(db, "users", userId, "teams");
           const teamsSnap = await getDocs(teamsRef);
+          const teamNames = teamsSnap.docs.map(doc => doc.id);
+
+            // Generate and upload new schedule using the function from helpers
+            await generateAndUploadSchedule(userId, teamNames);
       
           const teamCommitCounts: { [key: string]: number } = {};
           const teamSeniorCommits: { [key: string]: string[] } = {};
