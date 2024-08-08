@@ -128,10 +128,10 @@ const HSPlayerPage: React.FC = () => {
   };
 
   const getScoutRating = (scout: number): string => {
-    if (scout >= 15 && scout <= 20) return 'Poor';
-    if (scout >= 10 && scout < 15) return 'Fair';
-    if (scout >= 5 && scout < 10) return 'Good';
-    if (scout >= 0 && scout < 5) return 'Exc';
+    if (scout >= 37.5 && scout <= 50) return 'Poor';
+    if (scout >= 25 && scout < 37.5) return 'Fair';
+    if (scout >= 12.5 && scout < 25) return 'Good';
+    if (scout >= 0 && scout < 12.5) return 'Exc';
     return 'Unknown';
   };
 

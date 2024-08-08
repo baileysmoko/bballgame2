@@ -115,16 +115,16 @@ const RolloverButton: React.FC<RolloverButtonProps> = ({ onRolloverComplete }) =
         let scoutValue;
         switch (classYear) {
           case 'Freshman':
-            scoutValue = randomUniform(10, 20)();
+            scoutValue = randomUniform(30, 50)();
             break;
           case 'Sophomore':
-            scoutValue = randomUniform(6.7, 16.7)();
+            scoutValue = randomUniform(20, 40)();
             break;
           case 'Junior':
-            scoutValue = randomUniform(3.3, 13.3)();
+            scoutValue = randomUniform(10, 30)();
             break;
           case 'Senior':
-            scoutValue = randomUniform(0, 10)();
+            scoutValue = randomUniform(0, 20)();
             break;
           default:
             scoutValue = 0;
